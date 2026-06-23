@@ -20,7 +20,6 @@
 # =========== Our exclusions ===========
 *.wav
 *.log
-*.bat
 training_report.md
 gradio_outputs/
 __pycache__/

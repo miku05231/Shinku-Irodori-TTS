@@ -1,21 +1,17 @@
 # Shinku-Irodori-TTS
 
-基于 [Irodori-TTS-500M-v3](https://github.com/Aratako/Irodori-TTS) 的二次元角色语音合成工具包，提供 LoRA 微调和 OpenAI 兼容 API 服务器。
+基于 [Irodori-TTS-500M-v3](https://github.com/Aratako/Irodori-TTS) 的二阶堂真红（Shinku）语音合成模型，提供 OpenAI 兼容 API 服务器。
 
-> ⚠️ 本仓库仅包含增量文件，不包含原项目代码。使用前请先安装原项目。
+## 🎯 这是什么
 
-## 目录
+这是一个**预训练好的** Shinku 声音模型，你可以直接下载使用，无需训练。
 
-- [使用流程](#使用流程)
-- [配置要求](#配置要求)
-- [文件说明](#文件说明)
-- [API 参考](#api-参考)
-- [参数调优](#参数调优)
-- [AstrBot 集成](#astrbot-集成)
-- [训练新角色](#训练新角色)
-- [常见问题](#常见问题)
+- 🎤 基于 71 条 Shinku 语音样本训练
+- 🔌 OpenAI TTS API 兼容，可直接替换
+- 🤖 支持 AstrBot 等聊天机器人集成
+- 🖥️ 提供 Web UI 和命令行工具
 
-## 使用流程
+## 📦 快速开始
 
 ### 1. 安装原项目
 
@@ -25,42 +21,39 @@ cd Irodori-TTS
 uv sync --extra cu128
 ```
 
-### 2. 添加本仓库文件
-
-将本仓库所有文件复制到 `Irodori-TTS/` 目录下：
-
-```
-Irodori-TTS/
-├── api_server.py                     ← 新增
-├── generate_manifest.py              ← 新增
-├── configs/train_500m_v3_lora_shinku.yaml  ← 新增
-└── ... (原项目文件保持不变)
-```
-
-### 3. 下载基础模型
-
-从 HuggingFace 下载 [Irodori-TTS-500M-v3](https://huggingface.co/Aratako/Irodori-TTS-500M-v3)（约 2GB）：
+### 2. 下载基础模型
 
 ```bash
 huggingface-cli download Aratako/Irodori-TTS-500M-v3 --local-dir models/Irodori-TTS-500M-v3
 ```
 
-### 4. 获取 LoRA 权重（二选一）
+### 3. 下载 Shinku LoRA 权重
 
-**已有训练好的 LoRA**：放入 `outputs/shinku_lora/checkpoint_final/`
+从 [Releases](https://github.com/miku05231/Shinku-Irodori-TTS/releases) 下载 `shinku_lora.zip`，解压到 `outputs/shinku_lora/`：
 
-**自行训练**：参考下方[训练新角色](#训练新角色)
+```
+outputs/shinku_lora/checkpoint_final/
+├── adapter_model.safetensors  (81MB)
+├── adapter_config.json
+├── config.json
+└── irodori_lora_metadata.json
+```
 
-### 5. 启动 API 服务器
+### 4. 启动 API 服务器
 
+**方式一：一键启动（Windows）**
+```bash
+start_server.bat
+```
+
+**方式二：手动启动**
 ```bash
 set IRODORI_LORA=outputs/shinku_lora/checkpoint_final
-set IRODORI_DEFAULT_REF=outputs\shinku_lora\checkpoint_final\ref_audio.ogg
 set IRODORI_PORT=8088
 uv run python api_server.py
 ```
 
-### 6. 测试
+### 5. 测试
 
 ```bash
 curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
@@ -68,41 +61,22 @@ curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
   -d '{"model":"irodori-tts","input":"こんにちは"}'
 ```
 
-### 环境变量
+播放 `output.wav` 即可听到 Shinku 的声音。
+
+## 📋 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `IRODORI_LORA` | 空 | LoRA 适配器路径 |
-| `IRODORI_DEFAULT_REF` | 空 | 参考音频路径 |
+| `IRODORI_LORA` | 空 | LoRA 适配器路径（必填） |
+| `IRODORI_DEFAULT_REF` | 空 | 参考音频路径（可选，不设则用 no_ref 模式） |
+| `IRODORI_HOST` | `127.0.0.1` | 监听地址（`0.0.0.0` 允许外部访问） |
 | `IRODORI_PORT` | `8088` | API 端口 |
 | `IRODORI_DEVICE` | `cuda` | 运行设备 |
 | `IRODORI_CHECKPOINT` | `models/Irodori-TTS-500M-v3/model.safetensors` | 基础模型路径 |
 
-## 配置要求
+> ⚠️ **安全提示**：API 默认绑定 `127.0.0.1` 仅本机可访问。如需外部访问（如 Docker 或局域网），设置 `IRODORI_HOST=0.0.0.0`，但请注意**API 无认证机制**，暴露在网络上可能导致滥用。
 
-### 硬件
-
-| 项目 | 最低 | 推荐 |
-|------|------|------|
-| GPU | 8GB VRAM | 12GB+ VRAM |
-| 内存 | 16GB | 32GB |
-| 硬盘 | 10GB | 20GB+ |
-
-### 软件
-
-- Python 3.10 ~ 3.12
-- CUDA 12.8（GPU 训练/推理）
-- [uv](https://docs.astral.sh/uv/) 包管理器
-
-## 文件说明
-
-| 文件 | 作用 |
-|------|------|
-| `api_server.py` | OpenAI 兼容 TTS API 服务器 |
-| `generate_manifest.py` | 音频清单生成脚本 |
-| `configs/train_500m_v3_lora_shinku.yaml` | LoRA 训练配置 |
-
-## API 参考
+## 🔧 API 参考
 
 `POST /v1/audio/speech`，返回 WAV 音频。
 
@@ -111,6 +85,7 @@ curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `input` | string | — | 待合成文本（必填） |
+| `voice` | string | `null` | 参考音频路径（可选，不传则用 IRODORI_DEFAULT_REF 或 no_ref 模式） |
 | `speed` | float | `0.6` | 语速 |
 | `steps` | int | `40` | 采样步数 |
 | `text_scale` | float | `4.0` | 文本引导强度 |
@@ -129,7 +104,18 @@ curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
 }
 ```
 
-## 参数调优
+### 健康检查
+
+```bash
+curl http://localhost:8088/health
+```
+
+返回：
+```json
+{"status": "ready", "model_loaded": true}
+```
+
+## 🎨 参数调优
 
 ### 语速 (speed)
 
@@ -156,7 +142,7 @@ curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
 - `40`: 均衡（默认）
 - `50`: 高音质
 
-## AstrBot 集成
+## 🤖 AstrBot 集成
 
 插件配置：
 
@@ -165,43 +151,124 @@ curl -o output.wav -X POST http://localhost:8088/v1/audio/speech \
   "tts_provider": "openai_tts",
   "openai_api_base": "http://host.docker.internal:8088/v1",
   "openai_tts_model": "irodori-tts",
-  "openai_api_key": "sk-placeholder"
+  "openai_api_key": "***"
 }
 ```
 
-## 训练新角色
+## 🖥️ Web UI（可选）
 
-### 准备数据
+原项目提供 Gradio Web UI，适合可视化调试：
 
-manifest JSONL 格式：
+```bash
+# 标准版 UI
+uv run python gradio_app.py
 
-```jsonl
-{"text": "...", "audio": "path/to/audio.ogg", "speaker_id": "shinku"}
+# VoiceDesign 版 UI（支持语音设计功能）
+uv run python gradio_app_voicedesign.py
 ```
 
-### 生成清单
+启动后访问 `http://localhost:7860` 即可使用 Web 界面。
+
+## 📁 文件说明
+
+| 文件 | 作用 |
+|------|------|
+| `api_server.py` | OpenAI 兼容 TTS API 服务器 |
+| `generate_manifest.py` | 音频清单生成脚本（训练用） |
+| `configs/train_500m_v3_lora_shinku.yaml` | LoRA 训练配置（训练用） |
+| `start_server.bat` | Windows 一键启动脚本 |
+
+## ❓ 常见问题
+
+**Q: CUDA 不可用？**
+确认 CUDA 12.8 已安装，运行 `uv run python -c "import torch; print(torch.cuda.is_available())"` 检查。
+
+**Q: Docker 无法连接 API？**
+用 `host.docker.internal` 代替 `localhost`。
+
+**Q: 音质差？**
+增加 `steps` 到 50；确认 LoRA 路径正确。
+
+**Q: 语速不对？**
+调整 `speed` 参数，以 ±0.1 微调。
+
+**Q: 如何训练自己的声音模型？**
+参考下方[训练新角色](#训练新角色)章节。
+
+---
+
+## 🚀 训练新角色（可选）
+
+如果你想训练自己的声音模型，可以参考以下流程。
+
+### 配置要求
+
+| 项目 | 最低 | 推荐 |
+|------|------|------|
+| GPU | 8GB VRAM | 12GB+ VRAM |
+| 内存 | 16GB | 32GB |
+| 硬盘 | 10GB | 20GB+ |
+
+### 训练流程
+
+```
+本地音频 (*.wav/*.mp3/*.ogg/*.flac/*.m4a)
+    │
+    ▼
+generate_manifest.py         ← 第1步：扫描音频目录，生成 manifest（含 audio 路径）
+    │
+    ▼  data/train_manifest.jsonl
+    │
+prepare_manifest.py          ← 第2步：加载 manifest，计算 DACVAE latents，输出最终 manifest
+    │
+    ▼  data/train_manifest_with_latents.jsonl
+    │
+train.py                     ← 第3步：LoRA 训练
+```
+
+### 第1步：生成初始 manifest
 
 ```bash
 uv run python generate_manifest.py \
-  --audio-dir path/to/audio_folder \
-  --output data/manifest.jsonl \
+  --audio-dir path/to/audio/folder \
+  --output data/train_manifest.jsonl \
   --speaker-id my_speaker
 ```
 
-### 预计算 latents
-
-```bash
-uv run --no-sync python precompute_latents.py \
-  --manifest data/manifest.jsonl \
-  --output-dir data/latents
+输出示例：
+```jsonl
+{"text": "...", "audio": "/path/to/voice_00001.ogg", "speaker_id": "my_speaker"}
 ```
 
-### 训练
+> ⚠️ **关于占位文本**：默认情况下，`generate_manifest.py` 使用占位文本（`このテキストは話者埋め込み学習用です。`）。这对于 speaker embedding 训练没问题，但如果要做带真实台词的训练，需要替换为实际文本。可以使用 `--text` 参数指定自定义文本，或在生成后用脚本批量替换 JSONL 文件中的 `text` 字段。
+
+### 第2步：计算 DACVAE latents
+
+使用原项目的 `prepare_manifest.py`，从 JSONL 加载音频并计算 latents：
+
+```bash
+uv run --no-sync python prepare_manifest.py \
+  --dataset json \
+  --data-files data/train_manifest.jsonl \
+  --audio-column audio \
+  --text-column text \
+  --speaker-column speaker_id \
+  --speaker-id-prefix shinku \
+  --output-manifest data/train_manifest_with_latents.jsonl \
+  --latent-dir data/latents \
+  --device cuda
+```
+
+输出：`data/train_manifest_with_latents.jsonl`（含 `latent_path` 和 `num_frames` 字段）。
+
+> `--dataset json` 是必需的，表示使用 HuggingFace `datasets` 内置的 JSON loader 加载本地 JSONL 文件。`--speaker-id-prefix shinku` 用于在输出 manifest 中生成干净的 speaker_id（如 `shinku::my_speaker`），不加则默认以 `json` 作为前缀。
+
+### 第3步：LoRA 训练
 
 ```bash
 uv run --no-sync python train.py \
   --config configs/train_500m_v3_lora_shinku.yaml \
-  --manifest data/manifest_with_latents.jsonl \
+  --manifest data/train_manifest_with_latents.jsonl \
   --init-checkpoint models/Irodori-TTS-500M-v3/model.safetensors \
   --output-dir outputs/my_lora
 ```
@@ -216,20 +283,8 @@ uv run --no-sync python train.py \
 | `train.lora_r` | `16` | LoRA 秩 |
 | `train.precision` | `bf16` | 训练精度 |
 
-## 常见问题
+训练完成后，LoRA 权重位于 `outputs/my_lora/checkpoint_final/`。
 
-**Q: CUDA 不可用？**
-确认 CUDA 12.8 已安装，运行 `uv run python -c "import torch; print(torch.cuda.is_available())"` 检查。
-
-**Q: Docker 无法连接 API？**
-用 `host.docker.internal` 代替 `localhost`。
-
-**Q: 音质差？**
-增加 `steps` 到 50；确认 LoRA 路径和参考音频正确。
-
-**Q: 语速不对？**
-调整 `speed` 参数，以 ±0.1 微调。
-
-## 版权说明
+## 📄 版权说明
 
 本仓库仅包含增量工具代码。基础模型和 LoRA 权重的版权归属各自权利人。使用时请遵守原项目 [MIT License](https://github.com/Aratako/Irodori-TTS/blob/main/LICENSE)。

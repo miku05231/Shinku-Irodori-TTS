@@ -2,6 +2,7 @@
 """Irodori-TTS OpenAI-compatible API server with LoRA support."""
 import io
 import os
+import threading
 from pathlib import Path
 
 import soundfile as sf
@@ -15,6 +16,13 @@ from irodori_tts.inference_runtime import InferenceRuntime, RuntimeKey, Sampling
 
 app = FastAPI(title="Irodori-TTS Server")
 
+@app.get("/health")
+async def health_check():
+    """健康检查端点，用于探测服务是否就绪。"""
+    if runtime is not None:
+        return {"status": "ready", "model_loaded": True}
+    return {"status": "loading", "model_loaded": False}
+
 # Config
 BASE_CHECKPOINT = os.environ.get(
     "IRODORI_CHECKPOINT",
@@ -23,9 +31,11 @@ BASE_CHECKPOINT = os.environ.get(
 LORA_ADAPTER = os.environ.get("IRODORI_LORA", "")
 DEFAULT_REF_WAV = os.environ.get("IRODORI_DEFAULT_REF", "")
 DEVICE = os.environ.get("IRODORI_DEVICE", "cuda")
+HOST = os.environ.get("IRODORI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("IRODORI_PORT", "8088"))
 
 runtime: InferenceRuntime | None = None
+runtime_lock = threading.Lock()
 
 
 class SpeechRequest(BaseModel):
@@ -42,12 +52,14 @@ class SpeechRequest(BaseModel):
 def get_runtime() -> InferenceRuntime:
     global runtime
     if runtime is None:
-        key = RuntimeKey(
-            checkpoint=BASE_CHECKPOINT,
-            model_device=DEVICE,
-            codec_device=DEVICE,
-        )
-        runtime = InferenceRuntime.from_key(key)
+        with runtime_lock:
+            if runtime is None:  # 双重检查锁定
+                key = RuntimeKey(
+                    checkpoint=BASE_CHECKPOINT,
+                    model_device=DEVICE,
+                    codec_device=DEVICE,
+                )
+                runtime = InferenceRuntime.from_key(key)
     return runtime
 
 
@@ -67,7 +79,20 @@ async def create_speech(req: SpeechRequest):
     rt = get_runtime()
 
     ref_wav = req.voice or DEFAULT_REF_WAV or None
-    use_no_ref = LORA_ADAPTER is not None and LORA_ADAPTER != ""
+    
+    # 验证参考音频路径，防止路径遍历攻击
+    if ref_wav:
+        ref_path = Path(ref_wav).resolve()
+        # 检查文件是否存在且是音频文件
+        if not ref_path.is_file():
+            raise HTTPException(400, f"Reference audio not found: {ref_wav}")
+        allowed_ext = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
+        if ref_path.suffix.lower() not in allowed_ext:
+            raise HTTPException(400, f"Unsupported audio format. Allowed: {allowed_ext}")
+        ref_wav = str(ref_path)
+    
+    # no_ref 模式：有 LoRA 且没有参考音频时启用
+    no_ref = ref_wav is None and LORA_ADAPTER
 
     duration_scale = 1.0 / req.speed if req.speed > 0 else 1.0
 
@@ -75,7 +100,7 @@ async def create_speech(req: SpeechRequest):
         request = SamplingRequest(
             text=req.input,
             ref_wav=ref_wav,
-            no_ref=(ref_wav is None),
+            no_ref=bool(no_ref),
             duration_scale=duration_scale,
             num_steps=req.steps,
             cfg_scale_text=req.text_scale,
@@ -102,7 +127,9 @@ async def create_speech(req: SpeechRequest):
 
         return Response(content=content, media_type="audio/wav")
     except Exception as e:
-        raise HTTPException(500, f"Synthesis failed: {e}")
+        # 不向客户端返回原始异常，避免泄露内部路径
+        print(f"[ERROR] Synthesis failed: {e}")
+        raise HTTPException(500, "Synthesis failed. Check server logs for details.")
 
 
 if __name__ == "__main__":
@@ -110,5 +137,5 @@ if __name__ == "__main__":
     if LORA_ADAPTER:
         print(f"LoRA adapter: {LORA_ADAPTER}")
     get_runtime()
-    print(f"Model loaded. Starting server on port {PORT}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    print(f"Model loaded. Starting server on {HOST}:{PORT}")
+    uvicorn.run(app, host=HOST, port=PORT)
