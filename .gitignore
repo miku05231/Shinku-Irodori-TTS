@@ -1,0 +1,33 @@
+# =========== Original Irodori-TTS files (not tracked here) ===========
+/irodori_tts/
+/docs/
+/.python-version
+/convert_checkpoint_to_safetensors.py
+/gradio_app.py
+/gradio_app_voicedesign.py
+/infer.py
+/prepare_manifest.py
+/train.py
+/pyproject.toml
+/requirements.txt
+/uv.lock
+/LICENSE
+
+# Ignore original project configs - only our shinku config is tracked
+/configs/*
+!/configs/train_500m_v3_lora_shinku.yaml
+
+# =========== Our exclusions ===========
+*.wav
+*.log
+*.bat
+training_report.md
+gradio_outputs/
+__pycache__/
+*.pyc
+.python-version
+data/
+models/
+outputs/
+latents/
+._bak/
